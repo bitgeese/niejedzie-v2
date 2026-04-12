@@ -1,0 +1,14 @@
+# niejedzie.pl v2 cron
+# Install: sudo -u niejedzie crontab /opt/niejedzie/niejedzie-v2/infra/crontab.txt
+
+# Every 5 min — PKP API poll
+*/5 * * * * cd /opt/niejedzie/niejedzie-v2 && /usr/bin/node dist-scripts/scripts/poll-operations.js >> /var/log/niejedzie/poll.log 2>&1
+
+# Every 1 min — check push alerts
+* * * * * cd /opt/niejedzie/niejedzie-v2 && /usr/bin/node dist-scripts/scripts/check-push.js >> /var/log/niejedzie/push.log 2>&1
+
+# Daily 01:00 UTC (~02:00-03:00 Warsaw) — sync train_routes
+0 1 * * * cd /opt/niejedzie/niejedzie-v2 && /usr/bin/node dist-scripts/scripts/sync-routes.js >> /var/log/niejedzie/sync.log 2>&1
+
+# Daily 02:00 UTC — prune old rows
+0 2 * * * cd /opt/niejedzie/niejedzie-v2 && /usr/bin/node dist-scripts/scripts/prune.js >> /var/log/niejedzie/prune.log 2>&1

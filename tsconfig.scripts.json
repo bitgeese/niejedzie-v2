@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist-scripts",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": false,
+    "target": "es2022",
+    "isolatedModules": false,
+    "jsx": "preserve",
+    "paths": { "@/*": ["./src/*"] }
+  },
+  "include": ["scripts/**/*.ts", "src/lib/**/*.ts"],
+  "exclude": ["node_modules", "**/*.test.ts", "dist-scripts", "tests", ".next"]
+}
