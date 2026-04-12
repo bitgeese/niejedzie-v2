@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import Nav from "@/components/Nav";
 
 const outfit = Outfit({ subsets: ["latin", "latin-ext"], variable: "--font-sans" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono" });
@@ -16,7 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <head>
         <script defer data-domain="niejedzie.pl" src="https://plausible.io/js/script.js"></script>
       </head>
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-sans antialiased"><Nav />{children}</body>
     </html>
   );
 }

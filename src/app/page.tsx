@@ -3,7 +3,11 @@ import ConnectionForm from "@/components/ConnectionForm";
 export default function HomePage() {
   return (
     <main className="min-h-screen">
-      <section className="relative bg-[var(--color-ink)] text-white py-24 px-6">
+      <section className="relative overflow-hidden text-white py-24 px-6">
+        <div className="absolute inset-0 -z-10">
+          <img src="/hero-train.jpg" alt="Pociąg PKP na peronie dworca kolejowego w Polsce" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-[var(--color-ink)]"></div>
+        </div>
         <div className="max-w-4xl mx-auto text-center">
           <p className="font-mono text-xs uppercase tracking-widest text-[var(--color-brand-500)] mb-4">// monitor przesiadek</p>
           <h1 className="text-5xl md:text-6xl font-extrabold leading-tight">
