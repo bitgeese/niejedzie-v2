@@ -11,9 +11,9 @@
 set -euo pipefail
 
 NAME="niejedzie"
-TYPE="cx22"                # 2 vCPU, 4GB RAM, 40GB SSD — €4.51/mo
+TYPE="cx23"                # 2 vCPU, 4GB RAM, 40GB SSD (cx22 was renamed to cx23 in 2025)
 IMAGE="ubuntu-24.04"
-LOCATION="fsn1"            # Falkenstein, closest to Poland
+LOCATION="nbg1"            # Nuremberg (fsn1 was at capacity 2026-04-12)
 SSH_KEY="maciej-laptop"
 
 # Create server if it doesn't already exist
