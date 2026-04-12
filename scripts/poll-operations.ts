@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 import { db } from "../src/lib/db";
-import { fetchOperationsPage, fetchStatistics, type TrainOperationDto } from "../src/lib/pkp-api";
+import { fetchOperationsPage, fetchSchedules, fetchStatistics, extractTrainNumber, type TrainOperationDto } from "../src/lib/pkp-api";
 import { todayWarsaw } from "../src/lib/time";
 import { config as loadEnv } from "dotenv";
 loadEnv();
@@ -10,6 +10,14 @@ async function main() {
   if (!apiKey) { console.error("PKP_API_KEY missing"); process.exit(1); }
   const today = todayWarsaw();
   console.log(`[poll] ${new Date().toISOString()} - polling for ${today}`);
+
+  const schedules = await fetchSchedules(apiKey, today);
+  const trainNumberMap = new Map<string, string>();
+  if (schedules) {
+    for (const r of schedules.routes) {
+      trainNumberMap.set(`${r.scheduleId}/${r.orderId}`, extractTrainNumber(r));
+    }
+  }
 
   const stats = await fetchStatistics(apiKey, today);
   const trainsSeen: TrainOperationDto[] = [];
@@ -60,7 +68,8 @@ async function main() {
       const last = train.stations?.[train.stations.length - 1];
       const routeStart = first ? (stationDict[String(first.stationId)] ?? "") : "";
       const routeEnd = last ? (stationDict[String(last.stationId)] ?? "") : "";
-      const trainNumber = `${train.scheduleId}/${train.orderId}`;
+      const compound = `${train.scheduleId}/${train.orderId}`;
+      const trainNumber = trainNumberMap.get(compound) ?? compound;
 
       upsertTrain.run(train.operatingDate || today, trainNumber, null, routeStart, routeEnd,
         maxDelay > 5 ? 1 : 0, maxDelay, train.scheduleId, train.orderId);
