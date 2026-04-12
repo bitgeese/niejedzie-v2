@@ -23,3 +23,10 @@ export function yesterdayWarsaw(): string {
   const { year, month, day } = warsawParts(d);
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
+
+export function tomorrowWarsaw(): string {
+  const d = new Date();
+  d.setUTCHours(d.getUTCHours() + 24);
+  const { year, month, day } = warsawParts(d);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}

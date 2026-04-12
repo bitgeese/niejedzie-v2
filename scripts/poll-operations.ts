@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import { db } from "../src/lib/db";
 import { fetchOperationsPage, fetchSchedules, fetchStatistics, extractTrainNumber, type TrainOperationDto } from "../src/lib/pkp-api";
-import { todayWarsaw } from "../src/lib/time";
+import { todayWarsaw, yesterdayWarsaw, tomorrowWarsaw } from "../src/lib/time";
 import { config as loadEnv } from "dotenv";
 loadEnv();
 
@@ -11,10 +11,10 @@ async function main() {
   const today = todayWarsaw();
   console.log(`[poll] ${new Date().toISOString()} - polling for ${today}`);
 
-  const schedules = await fetchSchedules(apiKey, today);
   const trainNumberMap = new Map<string, string>();
-  if (schedules) {
-    for (const r of schedules.routes) {
+  for (const d of [yesterdayWarsaw(), today, tomorrowWarsaw()]) {
+    const s = await fetchSchedules(apiKey, d);
+    if (s) for (const r of s.routes) {
       trainNumberMap.set(`${r.scheduleId}/${r.orderId}`, extractTrainNumber(r));
     }
   }
