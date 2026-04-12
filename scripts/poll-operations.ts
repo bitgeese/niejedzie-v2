@@ -12,10 +12,13 @@ async function main() {
   console.log(`[poll] ${new Date().toISOString()} - polling for ${today}`);
 
   const trainNumberMap = new Map<string, string>();
+  const carrierMap = new Map<string, string>();
   for (const d of [yesterdayWarsaw(), today, tomorrowWarsaw()]) {
     const s = await fetchSchedules(apiKey, d);
     if (s) for (const r of s.routes) {
-      trainNumberMap.set(`${r.scheduleId}/${r.orderId}`, extractTrainNumber(r));
+      const key = `${r.scheduleId}/${r.orderId}`;
+      trainNumberMap.set(key, extractTrainNumber(r));
+      if (r.carrierCode) carrierMap.set(key, r.carrierCode);
     }
   }
 
@@ -70,14 +73,15 @@ async function main() {
       const routeEnd = last ? (stationDict[String(last.stationId)] ?? "") : "";
       const compound = `${train.scheduleId}/${train.orderId}`;
       const trainNumber = trainNumberMap.get(compound) ?? compound;
+      const carrierCode = carrierMap.get(compound) ?? "";
 
-      upsertTrain.run(train.operatingDate || today, trainNumber, null, routeStart, routeEnd,
+      upsertTrain.run(train.operatingDate || today, trainNumber, carrierCode || null, routeStart, routeEnd,
         maxDelay > 5 ? 1 : 0, maxDelay, train.scheduleId, train.orderId);
 
       if (maxDelay > 0) {
         topDelayed.push({
           trainNumber, delay: maxDelay, route: `${routeStart} -> ${routeEnd}`,
-          station: last ? (stationDict[String(last.stationId)] ?? "") : "", carrier: "",
+          station: last ? (stationDict[String(last.stationId)] ?? "") : "", carrier: carrierCode,
         });
       }
     }
