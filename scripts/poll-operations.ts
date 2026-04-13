@@ -57,16 +57,32 @@ async function main() {
 
   const insertMany = db().transaction((trains: TrainOperationDto[]) => {
     for (const train of trains) {
-      if (train.trainStatus === "S") { onTimeCount++; continue; }
-      totalTrainsSeen++;
+      const isToday = (train.operatingDate || today) === today;
+      if (train.trainStatus === "S") { if (isToday) onTimeCount++; continue; }
+
       let maxDelay = 0;
+      let fullyCancelled = true;
+      let stationsObserved = 0;
       for (const st of train.stations ?? []) {
-        const d = st.arrivalDelayMinutes ?? st.departureDelayMinutes ?? 0;
-        if (Math.abs(d) > Math.abs(maxDelay)) maxDelay = d;
-        if (st.isCancelled) cancelledCount++;
+        const observed = st.actualArrival || st.actualDeparture;
+        if (observed) {
+          stationsObserved++;
+          fullyCancelled = false;
+          const d = st.arrivalDelayMinutes ?? st.departureDelayMinutes ?? 0;
+          if (Math.abs(d) > Math.abs(maxDelay)) maxDelay = d;
+        }
+        if (st.isCancelled && isToday) cancelledCount++;
       }
-      if (maxDelay > 0) { totalDelay += maxDelay; delayCount++; }
-      if (maxDelay <= 5) onTimeCount++;
+
+      // Skip trains that were fully cancelled or haven't started (no observations)
+      // — their "delay" values from upstream are noise.
+      if (fullyCancelled || stationsObserved === 0) continue;
+
+      if (isToday) {
+        totalTrainsSeen++;
+        if (maxDelay > 0) { totalDelay += maxDelay; delayCount++; }
+        if (maxDelay <= 5) onTimeCount++;
+      }
 
       const first = train.stations?.[0];
       const last = train.stations?.[train.stations.length - 1];
@@ -79,7 +95,8 @@ async function main() {
       upsertTrain.run(train.operatingDate || today, trainNumber, carrierCode || null, routeStart, routeEnd,
         maxDelay > 5 ? 1 : 0, maxDelay, train.scheduleId, train.orderId);
 
-      if (maxDelay > 0) {
+      // Only today's trains with a real delay feed the public topDelayed list.
+      if (isToday && maxDelay > 0 && maxDelay < 240) {
         topDelayed.push({
           trainNumber, delay: maxDelay, route: `${routeStart} -> ${routeEnd}`,
           station: last ? (stationDict[String(last.stationId)] ?? "") : "", carrier: carrierCode,
