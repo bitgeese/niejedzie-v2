@@ -65,10 +65,12 @@ function destinationOnRoute(route: RouteStop[], destInput: string): RouteStop | 
 
 function findTransfers(xTrain: string, destInput: string): Transfer[] {
   const today = todayWarsaw();
-  const like = `%${destInput.trim().toLowerCase()}%`;
+  const normalized = destInput.trim().toLowerCase();
+  const likePrefix = `${normalized}%`;
+  const likeWord = `% ${normalized}%`;
 
   const rows = db().prepare(`
-    SELECT
+    SELECT DISTINCT
       COALESCE(NULLIF(x.station_name,''), sx.name, '') as transfer_station,
       x.arrival_time as x_arrival,
       x.departure_time as x_departure,
@@ -94,12 +96,13 @@ function findTransfers(xTrain: string, destInput: string): Transfer[] {
     LEFT JOIN train_ids ti ON ti.train_number = y.train_number
     WHERE x.operating_date = ?
       AND x.train_number = ?
-      AND (LOWER(COALESCE(NULLIF(yd.station_name,''), syd.name, '')) LIKE ?)
+      AND (LOWER(COALESCE(NULLIF(yd.station_name,''), syd.name, '')) LIKE ?
+           OR LOWER(COALESCE(NULLIF(yd.station_name,''), syd.name, '')) LIKE ?)
       AND y.departure_time IS NOT NULL
       AND (x.arrival_time IS NOT NULL OR x.departure_time IS NOT NULL)
     ORDER BY wait_min ASC, y_dest_arrival ASC
     LIMIT 30
-  `).all(today, today, today, xTrain, like) as Array<{
+  `).all(today, today, today, xTrain, likePrefix, likeWord) as Array<{
     transfer_station: string;
     x_arrival: string;
     x_departure: string;
