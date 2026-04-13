@@ -113,7 +113,7 @@ function findTransfers(xTrain: string, destInput: string): Transfer[] {
     if (xA === null || yD === null) continue;
     let wait = yD - xA;
     if (wait < 0) wait += 1440;
-    if (wait < 5 || wait > 120) continue;
+    if (wait < 5 || wait > 180) continue;
     const key = `${r.transfer_station}|${r.y_train}`;
     if (seenAtStation.has(key)) continue;
     seenAtStation.add(key);
@@ -226,6 +226,12 @@ export default async function WynikPage({ searchParams }: { searchParams: Promis
           )}
         </div>
 
+        {!destStop && transfers.length === 0 && (
+          <div className="bg-white rounded-2xl p-6 mt-6 shadow-sm text-center text-[var(--color-ink-muted)]">
+            <p>Nie znaleźliśmy dzisiaj sensownej przesiadki do &quot;{destInput}&quot; (w oknie do 3h czasu oczekiwania).</p>
+            <p className="text-xs mt-2">Sprawdź dokładną nazwę stacji lub rozkład na portalpasazera.pl.</p>
+          </div>
+        )}
         {!destStop && transfers.length > 0 && (
           <div className="bg-white rounded-2xl p-6 mt-6 shadow-sm">
             <p className="font-mono text-xs uppercase tracking-wider text-[var(--color-ink-faint)] mb-4">// opcje przesiadki ({transfers.length})</p>
