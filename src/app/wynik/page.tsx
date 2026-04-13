@@ -6,6 +6,23 @@ export const dynamic = "force-dynamic";
 
 interface Train { train_number: string; carrier: string | null; max_delay: number; route_start: string; route_end: string; }
 interface RouteStop { stop_sequence: number; station_name: string; arrival_time: string | null; departure_time: string | null; }
+interface Transfer {
+  transfer_station: string;
+  x_arrival: string;
+  y_train: string;
+  y_carrier: string | null;
+  y_departure: string;
+  y_dest_arrival: string;
+  dest_name: string;
+  wait_minutes: number;
+}
+
+function timeToMin(hhmm: string | null | undefined): number | null {
+  if (!hhmm) return null;
+  const [h, m] = hhmm.split(":").map(Number);
+  if (isNaN(h) || isNaN(m)) return null;
+  return h * 60 + m;
+}
 
 function findTrain(trainInput: string): Train | null {
   const today = todayWarsaw();
@@ -46,6 +63,75 @@ function destinationOnRoute(route: RouteStop[], destInput: string): RouteStop | 
   return route.find((s) => s.station_name.toLowerCase().includes(q)) ?? null;
 }
 
+function findTransfers(xTrain: string, destInput: string): Transfer[] {
+  const today = todayWarsaw();
+  const like = `%${destInput.trim().toLowerCase()}%`;
+
+  const rows = db().prepare(`
+    SELECT
+      COALESCE(NULLIF(x.station_name,''), sx.name, '') as transfer_station,
+      x.arrival_time as x_arrival,
+      x.departure_time as x_departure,
+      y.train_number as y_train,
+      ti.carrier_code as y_carrier,
+      y.departure_time as y_departure,
+      yd.arrival_time as y_dest_arrival,
+      COALESCE(NULLIF(yd.station_name,''), syd.name, '') as dest_name
+    FROM train_routes x
+    LEFT JOIN stations sx ON sx.id = x.station_id
+    JOIN train_routes y ON y.operating_date = ?
+      AND y.station_id = x.station_id
+      AND y.train_number != x.train_number
+    JOIN train_routes yd ON yd.operating_date = ?
+      AND yd.train_number = y.train_number
+      AND yd.stop_sequence > y.stop_sequence
+    LEFT JOIN stations syd ON syd.id = yd.station_id
+    LEFT JOIN train_ids ti ON ti.train_number = y.train_number
+    WHERE x.operating_date = ?
+      AND x.train_number = ?
+      AND (LOWER(COALESCE(NULLIF(yd.station_name,''), syd.name, '')) LIKE ?)
+      AND y.departure_time IS NOT NULL
+      AND x.arrival_time IS NOT NULL
+    ORDER BY y_dest_arrival
+    LIMIT 30
+  `).all(today, today, today, xTrain, like) as Array<{
+    transfer_station: string;
+    x_arrival: string;
+    x_departure: string;
+    y_train: string;
+    y_carrier: string | null;
+    y_departure: string;
+    y_dest_arrival: string;
+    dest_name: string;
+  }>;
+
+  const candidates: Transfer[] = [];
+  const seenAtStation = new Set<string>();
+  for (const r of rows) {
+    const xA = timeToMin(r.x_arrival) ?? timeToMin(r.x_departure);
+    const yD = timeToMin(r.y_departure);
+    if (xA === null || yD === null) continue;
+    let wait = yD - xA;
+    if (wait < 0) wait += 1440;
+    if (wait < 5 || wait > 120) continue;
+    const key = `${r.transfer_station}|${r.y_train}`;
+    if (seenAtStation.has(key)) continue;
+    seenAtStation.add(key);
+    candidates.push({
+      transfer_station: r.transfer_station,
+      x_arrival: r.x_arrival,
+      y_train: r.y_train,
+      y_carrier: r.y_carrier,
+      y_departure: r.y_departure,
+      y_dest_arrival: r.y_dest_arrival,
+      dest_name: r.dest_name,
+      wait_minutes: wait,
+    });
+    if (candidates.length >= 5) break;
+  }
+  return candidates;
+}
+
 function addDelay(hhmm: string | null, delay: number): string {
   if (!hhmm) return "";
   const [h, m] = hhmm.split(":").map(Number);
@@ -84,6 +170,7 @@ export default async function WynikPage({ searchParams }: { searchParams: Promis
 
   const route = findRoute(train.train_number);
   const destStop = destinationOnRoute(route, destInput);
+  const transfers = destStop ? [] : findTransfers(train.train_number, destInput);
   const delay = train.max_delay || 0;
   const hasLiveData = delay > 0 || (train.max_delay !== undefined && db().prepare(
     `SELECT 1 FROM active_trains WHERE operating_date = ? AND train_number = ?`,
@@ -133,11 +220,49 @@ export default async function WynikPage({ searchParams }: { searchParams: Promis
             </div>
           ) : (
             <div className="mt-6 bg-orange-50 rounded-xl p-4">
-              <p className="font-bold text-orange-900">Brak bezpośredniego połączenia do &quot;{destInput}&quot;</p>
-              <p className="text-sm text-orange-700 mt-1">Ten pociąg nie zatrzymuje się na tej stacji.</p>
+              <p className="font-bold text-orange-900">Potrzebujesz przesiadki do &quot;{destInput}&quot;</p>
+              <p className="text-sm text-orange-700 mt-1">Ten pociąg nie dojeżdża bezpośrednio. Sprawdź opcje przesiadki poniżej.</p>
             </div>
           )}
         </div>
+
+        {!destStop && transfers.length > 0 && (
+          <div className="bg-white rounded-2xl p-6 mt-6 shadow-sm">
+            <p className="font-mono text-xs uppercase tracking-wider text-[var(--color-ink-faint)] mb-4">// opcje przesiadki ({transfers.length})</p>
+            <ul className="space-y-4">
+              {transfers.map((t, i) => (
+                <li key={i} className="border border-[var(--color-border)] rounded-xl p-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <div>
+                      <span className="font-bold">Przesiadka w: {t.transfer_station}</span>
+                      <span className="text-sm text-[var(--color-ink-muted)] ml-2">czas na przesiadkę: {t.wait_minutes} min</span>
+                    </div>
+                    <span className="font-mono text-sm text-[var(--color-ink-faint)]">
+                      przyjazd {t.y_dest_arrival ?? "—"}
+                    </span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+                    <div className="bg-[var(--color-cream-dark)] rounded-lg p-2">
+                      <p className="font-mono text-xs uppercase text-[var(--color-ink-faint)]">etap 1</p>
+                      <p className="font-mono font-semibold">{train.train_number}</p>
+                      <p className="text-[var(--color-ink-muted)]">→ {t.transfer_station}</p>
+                      <p className="font-mono text-xs">przyj. {t.x_arrival}</p>
+                    </div>
+                    <div className="flex items-center justify-center font-mono text-xs text-[var(--color-ink-faint)]">
+                      {t.wait_minutes} min →
+                    </div>
+                    <div className="bg-[var(--color-cream-dark)] rounded-lg p-2">
+                      <p className="font-mono text-xs uppercase text-[var(--color-ink-faint)]">etap 2</p>
+                      <p className="font-mono font-semibold">{t.y_train}{t.y_carrier ? ` (${t.y_carrier})` : ""}</p>
+                      <p className="text-[var(--color-ink-muted)]">→ {t.dest_name}</p>
+                      <p className="font-mono text-xs">odj. {t.y_departure}</p>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {route.length > 0 && (
           <div className="bg-white rounded-2xl p-6 mt-6 shadow-sm">
