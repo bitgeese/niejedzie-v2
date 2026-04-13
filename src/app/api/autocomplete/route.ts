@@ -27,8 +27,16 @@ export async function GET(req: NextRequest) {
 
   const rows = database
     .prepare(
-      `SELECT name FROM stations WHERE name LIKE ?
-       ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, length(name), name LIMIT 10`,
+      `SELECT name FROM stations
+       WHERE name LIKE ?
+         AND name NOT LIKE '% -'
+         AND name NOT LIKE '%-'
+       ORDER BY
+         CASE WHEN name LIKE ? COLLATE NOCASE THEN 0 ELSE 1 END,
+         CASE WHEN name LIKE '%Główny' OR name LIKE '%Centralna' THEN 0 ELSE 1 END,
+         length(name),
+         name
+       LIMIT 10`,
     )
     .all(like, prefix) as { name: string }[];
   return NextResponse.json({ suggestions: rows.map((r) => ({ text: r.name })) });
