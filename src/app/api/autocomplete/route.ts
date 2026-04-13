@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { todayWarsaw } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -10,33 +9,27 @@ export async function GET(req: NextRequest) {
   if (q.length < 2) return NextResponse.json({ suggestions: [] });
 
   const database = db();
-  const today = todayWarsaw();
   const like = `%${q}%`;
   const prefix = `${q}%`;
 
   if (type === "train") {
     const rows = database
       .prepare(
-        `SELECT train_number, route_start, route_end
-         FROM active_trains
-         WHERE operating_date = ? AND train_number LIKE ?
-         ORDER BY train_number LIMIT 10`,
+        `SELECT train_number, carrier_code FROM train_ids
+         WHERE train_number LIKE ?
+         ORDER BY length(train_number), train_number LIMIT 10`,
       )
-      .all(today, prefix) as { train_number: string; route_start: string; route_end: string }[];
+      .all(prefix) as { train_number: string; carrier_code: string | null }[];
     return NextResponse.json({
-      suggestions: rows.map((r) => ({
-        text: r.train_number,
-        detail: r.route_start && r.route_end ? `${r.route_start} → ${r.route_end}` : undefined,
-      })),
+      suggestions: rows.map((r) => ({ text: r.train_number, detail: r.carrier_code ?? undefined })),
     });
   }
 
   const rows = database
     .prepare(
-      `SELECT station_name, COUNT(*) as c FROM train_routes
-       WHERE operating_date = ? AND station_name LIKE ?
-       GROUP BY station_name ORDER BY c DESC LIMIT 10`,
+      `SELECT name FROM stations WHERE name LIKE ?
+       ORDER BY CASE WHEN name LIKE ? THEN 0 ELSE 1 END, length(name), name LIMIT 10`,
     )
-    .all(today, like) as { station_name: string }[];
-  return NextResponse.json({ suggestions: rows.map((r) => ({ text: r.station_name })) });
+    .all(like, prefix) as { name: string }[];
+  return NextResponse.json({ suggestions: rows.map((r) => ({ text: r.name })) });
 }

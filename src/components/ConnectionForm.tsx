@@ -49,11 +49,8 @@ function AutocompleteInput({
 }) {
   const [hidden, setHidden] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const { suggestions, loading, err } = useAutocomplete(type, value);
+  const { suggestions } = useAutocomplete(type, value);
   const open = !hidden && suggestions.length > 0;
-  const debug = value.trim().length >= 2
-    ? `[AC debug] ${loading ? "loading..." : `${suggestions.length} results`}${err ? ` err=${err}` : ""}`
-    : "";
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!open) return;
@@ -91,7 +88,6 @@ function AutocompleteInput({
           required
         />
       </label>
-      {debug && <p className="mt-1 font-mono text-xs text-red-600">{debug}</p>}
       {open && (
         <ul className="absolute z-30 left-0 right-0 mt-1 bg-white border border-[var(--color-border)] rounded-xl shadow-lg max-h-64 overflow-y-auto">
           {suggestions.map((s, i) => (

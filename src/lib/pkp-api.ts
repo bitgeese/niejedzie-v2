@@ -115,6 +115,24 @@ export async function fetchOperationsPage(
   return { trains: res.trains, stations: res.stations, hasNextPage: res.pagination.hasNextPage };
 }
 
+export async function fetchAllStations(apiKey: string): Promise<{ id: number; name: string }[]> {
+  const stations: { id: number; name: string }[] = [];
+  let skip = 0;
+  const take = 500;
+  while (true) {
+    const res = await pkpFetch<{ stations: { id: number; name: string }[]; totalCount: number; returnedCount: number }>(
+      "/api/v1/dictionaries/stations",
+      apiKey,
+      { skip: String(skip), take: String(take) },
+    );
+    if (!res || res.stations.length === 0) break;
+    stations.push(...res.stations);
+    if (stations.length >= res.totalCount) break;
+    skip += res.stations.length;
+  }
+  return stations;
+}
+
 export async function fetchSchedules(
   apiKey: string,
   date: string,

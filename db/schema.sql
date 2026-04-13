@@ -38,6 +38,13 @@ CREATE TABLE IF NOT EXISTS train_routes (
 CREATE INDEX IF NOT EXISTS idx_train_routes_station
   ON train_routes (station_name);
 
+CREATE TABLE IF NOT EXISTS stations (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_stations_name ON stations (name);
+
 CREATE TABLE IF NOT EXISTS train_ids (
   schedule_id INTEGER NOT NULL,
   order_id INTEGER NOT NULL,
