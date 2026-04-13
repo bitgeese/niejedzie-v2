@@ -1,7 +1,7 @@
 #!/usr/bin/env tsx
 import { db } from "../src/lib/db";
-import { fetchOperationsPage, fetchSchedules, fetchStatistics, extractTrainNumber, type TrainOperationDto } from "../src/lib/pkp-api";
-import { todayWarsaw, yesterdayWarsaw, tomorrowWarsaw } from "../src/lib/time";
+import { fetchOperationsPage, fetchStatistics, type TrainOperationDto } from "../src/lib/pkp-api";
+import { todayWarsaw } from "../src/lib/time";
 import { config as loadEnv } from "dotenv";
 loadEnv();
 
@@ -11,16 +11,17 @@ async function main() {
   const today = todayWarsaw();
   console.log(`[poll] ${new Date().toISOString()} - polling for ${today}`);
 
+  const idRows = db()
+    .prepare("SELECT schedule_id, order_id, train_number, carrier_code FROM train_ids")
+    .all() as { schedule_id: number; order_id: number; train_number: string; carrier_code: string | null }[];
   const trainNumberMap = new Map<string, string>();
   const carrierMap = new Map<string, string>();
-  for (const d of [yesterdayWarsaw(), today, tomorrowWarsaw()]) {
-    const s = await fetchSchedules(apiKey, d);
-    if (s) for (const r of s.routes) {
-      const key = `${r.scheduleId}/${r.orderId}`;
-      trainNumberMap.set(key, extractTrainNumber(r));
-      if (r.carrierCode) carrierMap.set(key, r.carrierCode);
-    }
+  for (const row of idRows) {
+    const key = `${row.schedule_id}/${row.order_id}`;
+    trainNumberMap.set(key, row.train_number);
+    if (row.carrier_code) carrierMap.set(key, row.carrier_code);
   }
+  console.log(`[poll] loaded ${trainNumberMap.size} train_id mappings from DB`);
 
   const stats = await fetchStatistics(apiKey, today);
   const trainsSeen: TrainOperationDto[] = [];

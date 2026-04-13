@@ -1,7 +1,6 @@
 #!/usr/bin/env tsx
 import { db } from "../src/lib/db";
 import { fetchSchedules, extractTrainNumber } from "../src/lib/pkp-api";
-import { todayWarsaw, yesterdayWarsaw } from "../src/lib/time";
 import { config as loadEnv } from "dotenv";
 loadEnv();
 
@@ -21,9 +20,19 @@ async function syncDate(apiKey: string, date: string): Promise<number> {
       departure_time = excluded.departure_time
   `);
 
+  const upsertId = db().prepare(`
+    INSERT INTO train_ids (schedule_id, order_id, train_number, carrier_code, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(schedule_id, order_id) DO UPDATE SET
+      train_number = excluded.train_number,
+      carrier_code = excluded.carrier_code,
+      updated_at = datetime('now')
+  `);
+
   const insertMany = db().transaction((routes: typeof result.routes) => {
     for (const route of routes) {
       const trainNumber = extractTrainNumber(route);
+      upsertId.run(route.scheduleId, route.orderId, trainNumber, route.carrierCode ?? null);
       for (const st of route.stations ?? []) {
         upsertRoute.run(date, trainNumber, st.orderNumber,
           result.stations[String(st.stationId)] ?? "", st.stationId,
@@ -39,9 +48,14 @@ async function syncDate(apiKey: string, date: string): Promise<number> {
 async function main() {
   const apiKey = process.env.PKP_API_KEY;
   if (!apiKey) { console.error("PKP_API_KEY missing"); process.exit(1); }
-  const n1 = await syncDate(apiKey, todayWarsaw());
-  const n2 = await syncDate(apiKey, yesterdayWarsaw());
-  console.log(`[sync-routes] total: ${n1} today + ${n2} yesterday`);
+  let total = 0;
+  for (let offset = -1; offset <= 7; offset++) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() + offset);
+    const date = d.toISOString().slice(0, 10);
+    total += await syncDate(apiKey, date);
+  }
+  console.log(`[sync-routes] total routes across 9 days: ${total}`);
 }
 
 main().catch((err) => { console.error("[sync-routes] fatal:", err); process.exit(1); }).finally(() => process.exit(0));
