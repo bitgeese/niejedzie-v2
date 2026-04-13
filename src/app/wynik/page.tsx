@@ -76,7 +76,12 @@ function findTransfers(xTrain: string, destInput: string): Transfer[] {
       ti.carrier_code as y_carrier,
       y.departure_time as y_departure,
       yd.arrival_time as y_dest_arrival,
-      COALESCE(NULLIF(yd.station_name,''), syd.name, '') as dest_name
+      COALESCE(NULLIF(yd.station_name,''), syd.name, '') as dest_name,
+      (
+        (CAST(substr(y.departure_time,1,2) AS INTEGER)*60 + CAST(substr(y.departure_time,4,2) AS INTEGER))
+        - (CAST(substr(COALESCE(x.arrival_time, x.departure_time),1,2) AS INTEGER)*60 + CAST(substr(COALESCE(x.arrival_time, x.departure_time),4,2) AS INTEGER))
+        + 1440
+      ) % 1440 as wait_min
     FROM train_routes x
     LEFT JOIN stations sx ON sx.id = x.station_id
     JOIN train_routes y ON y.operating_date = ?
@@ -91,8 +96,8 @@ function findTransfers(xTrain: string, destInput: string): Transfer[] {
       AND x.train_number = ?
       AND (LOWER(COALESCE(NULLIF(yd.station_name,''), syd.name, '')) LIKE ?)
       AND y.departure_time IS NOT NULL
-      AND x.arrival_time IS NOT NULL
-    ORDER BY y_dest_arrival
+      AND (x.arrival_time IS NOT NULL OR x.departure_time IS NOT NULL)
+    ORDER BY wait_min ASC, y_dest_arrival ASC
     LIMIT 30
   `).all(today, today, today, xTrain, like) as Array<{
     transfer_station: string;
