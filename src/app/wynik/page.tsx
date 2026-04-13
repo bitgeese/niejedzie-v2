@@ -4,23 +4,35 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-interface Train { train_number: string; carrier: string | null; max_delay: number; is_delayed: number; route_start: string; route_end: string; }
+interface Train { train_number: string; carrier: string | null; max_delay: number; route_start: string; route_end: string; }
 interface RouteStop { stop_sequence: number; station_name: string; arrival_time: string | null; departure_time: string | null; }
 
 function findTrain(trainInput: string): Train | null {
   const today = todayWarsaw();
-  const digits = trainInput.replace(/\D/g, "");
-  if (!digits) return null;
-  return (db().prepare(
-    `SELECT train_number, carrier, max_delay, is_delayed, route_start, route_end
-     FROM active_trains WHERE operating_date = ? AND train_number LIKE ? LIMIT 1`
-  ).get(today, `%${digits}%`) as Train | undefined) ?? null;
+  const normalized = trainInput.trim().replace(/\s+/g, "");
+  if (!normalized) return null;
+
+  const live = db().prepare(
+    `SELECT train_number, carrier, max_delay, route_start, route_end
+     FROM active_trains WHERE operating_date = ? AND train_number = ? LIMIT 1`,
+  ).get(today, normalized) as Train | undefined;
+  if (live) return live;
+
+  const scheduled = db().prepare(
+    `SELECT ti.train_number, ti.carrier_code as carrier,
+            (SELECT station_name FROM train_routes WHERE operating_date = ? AND train_number = ti.train_number ORDER BY stop_sequence ASC LIMIT 1) as route_start,
+            (SELECT station_name FROM train_routes WHERE operating_date = ? AND train_number = ti.train_number ORDER BY stop_sequence DESC LIMIT 1) as route_end,
+            0 as max_delay
+     FROM train_ids ti
+     WHERE ti.train_number = ? LIMIT 1`,
+  ).get(today, today, normalized) as Train | undefined;
+  return scheduled ?? null;
 }
 
 function findRoute(trainNumber: string): RouteStop[] {
   return db().prepare(
     `SELECT stop_sequence, station_name, arrival_time, departure_time
-     FROM train_routes WHERE operating_date = ? AND train_number = ? ORDER BY stop_sequence`
+     FROM train_routes WHERE operating_date = ? AND train_number = ? ORDER BY stop_sequence`,
   ).all(todayWarsaw(), trainNumber) as RouteStop[];
 }
 
@@ -52,9 +64,9 @@ export default async function WynikPage({ searchParams }: { searchParams: Promis
       <main className="min-h-screen py-16 px-6">
         <div className="max-w-md mx-auto text-center">
           <p className="text-6xl mb-6">🚂</p>
-          <h2 className="text-2xl font-bold mb-3">Nie znaleźliśmy pociągu "{trainInput}"</h2>
+          <h2 className="text-2xl font-bold mb-3">Nie znaleźliśmy pociągu &quot;{trainInput}&quot;</h2>
           <p className="text-[var(--color-ink-muted)] mb-8">
-            Dane rozkładowe synchronizujemy codziennie. Spróbuj wpisać pełny numer z prefiksem (np. IC 5313).
+            Sprawdź numer na bilecie lub na tablicy informacyjnej. Używamy pełnego numeru pociągu (np. 49015).
           </p>
           <div className="flex flex-wrap gap-3 justify-center">
             <Link href="/" className="btn-primary">Wróć do wyszukiwania</Link>
@@ -68,6 +80,9 @@ export default async function WynikPage({ searchParams }: { searchParams: Promis
   const route = findRoute(train.train_number);
   const destStop = destinationOnRoute(route, destInput);
   const delay = train.max_delay || 0;
+  const hasLiveData = delay > 0 || (train.max_delay !== undefined && db().prepare(
+    `SELECT 1 FROM active_trains WHERE operating_date = ? AND train_number = ?`,
+  ).get(todayWarsaw(), train.train_number));
 
   return (
     <main className="min-h-screen py-12 px-6">
@@ -82,8 +97,17 @@ export default async function WynikPage({ searchParams }: { searchParams: Promis
             <div>
               <span className="font-mono font-semibold text-lg">{train.train_number}</span>
               {train.carrier && <span className="ml-2 font-mono text-xs text-[var(--color-ink-muted)]">{train.carrier}</span>}
+              {train.route_start && train.route_end && (
+                <p className="text-sm text-[var(--color-ink-muted)] mt-1">{train.route_start} → {train.route_end}</p>
+              )}
             </div>
-            {delay > 0 && <span className="font-mono font-bold text-[var(--color-brand-500)]">+{delay} min</span>}
+            {delay > 0 ? (
+              <span className="font-mono font-bold text-[var(--color-brand-500)]">+{delay} min</span>
+            ) : hasLiveData ? (
+              <span className="font-mono text-xs text-green-700">na czas</span>
+            ) : (
+              <span className="font-mono text-xs text-[var(--color-ink-faint)]">brak danych live</span>
+            )}
           </div>
 
           {destStop ? (
@@ -104,7 +128,7 @@ export default async function WynikPage({ searchParams }: { searchParams: Promis
             </div>
           ) : (
             <div className="mt-6 bg-orange-50 rounded-xl p-4">
-              <p className="font-bold text-orange-900">Brak bezpośredniego połączenia do "{destInput}"</p>
+              <p className="font-bold text-orange-900">Brak bezpośredniego połączenia do &quot;{destInput}&quot;</p>
               <p className="text-sm text-orange-700 mt-1">Ten pociąg nie zatrzymuje się na tej stacji.</p>
             </div>
           )}
@@ -112,10 +136,10 @@ export default async function WynikPage({ searchParams }: { searchParams: Promis
 
         {route.length > 0 && (
           <div className="bg-white rounded-2xl p-6 mt-6 shadow-sm">
-            <p className="font-mono text-xs uppercase tracking-wider text-[var(--color-ink-faint)] mb-4">// trasa pociągu</p>
-            <ul className="space-y-2">
+            <p className="font-mono text-xs uppercase tracking-wider text-[var(--color-ink-faint)] mb-4">// trasa pociągu ({route.length} przystanków)</p>
+            <ul className="space-y-1 max-h-96 overflow-y-auto">
               {route.map((s) => (
-                <li key={s.stop_sequence} className={`flex items-center justify-between py-2 ${destStop && s.stop_sequence === destStop.stop_sequence ? "bg-green-50 px-3 rounded-lg" : ""}`}>
+                <li key={s.stop_sequence} className={`flex items-center justify-between py-2 px-3 rounded-lg ${destStop && s.stop_sequence === destStop.stop_sequence ? "bg-green-50 font-bold" : ""}`}>
                   <span>{s.station_name}</span>
                   <span className="font-mono text-sm text-[var(--color-ink-muted)]">{s.arrival_time ?? s.departure_time ?? ""}</span>
                 </li>
