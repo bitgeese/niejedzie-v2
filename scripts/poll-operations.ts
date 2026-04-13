@@ -58,7 +58,10 @@ async function main() {
   const insertMany = db().transaction((trains: TrainOperationDto[]) => {
     for (const train of trains) {
       const isToday = (train.operatingDate || today) === today;
-      if (train.trainStatus === "S") { if (isToday) onTimeCount++; continue; }
+      if (train.trainStatus === "S") {
+        if (isToday) { onTimeCount++; totalTrainsSeen++; }
+        continue;
+      }
 
       let maxDelay = 0;
       let fullyCancelled = true;
