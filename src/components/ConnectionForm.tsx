@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Suggestion = { text: string; detail?: string };
 
@@ -44,19 +44,10 @@ function AutocompleteInput({
   onChange: (v: string) => void;
   mono?: boolean;
 }) {
-  const [focused, setFocused] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
   const { suggestions } = useAutocomplete(type, value);
-  const open = focused && suggestions.length > 0;
-  const boxRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setFocused(false);
-    }
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+  const open = !hidden && suggestions.length > 0;
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!open) return;
@@ -69,14 +60,14 @@ function AutocompleteInput({
     } else if (e.key === "Enter" && activeIdx >= 0) {
       e.preventDefault();
       onChange(suggestions[activeIdx].text);
-      setFocused(false);
+      setHidden(true);
     } else if (e.key === "Escape") {
-      setFocused(false);
+      setHidden(true);
     }
   }
 
   return (
-    <div ref={boxRef} className="relative">
+    <div className="relative">
       <label className="block">
         <span className="font-mono text-xs uppercase tracking-wider text-[var(--color-ink-muted)]">{label}</span>
         <input
@@ -85,9 +76,8 @@ function AutocompleteInput({
           onChange={(e) => {
             onChange(e.target.value);
             setActiveIdx(-1);
-            setFocused(true);
+            setHidden(false);
           }}
-          onFocus={() => setFocused(true)}
           onKeyDown={onKeyDown}
           placeholder={placeholder}
           autoComplete="off"
@@ -96,14 +86,14 @@ function AutocompleteInput({
         />
       </label>
       {open && (
-        <ul className="absolute z-20 left-0 right-0 mt-1 bg-white border border-[var(--color-border)] rounded-xl shadow-lg max-h-64 overflow-y-auto">
+        <ul className="absolute z-30 left-0 right-0 mt-1 bg-white border border-[var(--color-border)] rounded-xl shadow-lg max-h-64 overflow-y-auto">
           {suggestions.map((s, i) => (
             <li
               key={s.text + i}
               onMouseDown={(e) => {
                 e.preventDefault();
                 onChange(s.text);
-                setFocused(false);
+                setHidden(true);
               }}
               className={`px-4 py-2 cursor-pointer text-sm text-[var(--color-ink)] flex justify-between items-center gap-3 ${i === activeIdx ? "bg-[var(--color-cream-dark)]" : "hover:bg-[var(--color-cream-dark)]"}`}
             >
