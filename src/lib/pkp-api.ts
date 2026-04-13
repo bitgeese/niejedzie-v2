@@ -124,7 +124,7 @@ export async function fetchAllStations(apiKey: string): Promise<{ id: number; na
       apiKey,
       { search: p },
     );
-    if (!res) continue;
+    if (!res || !Array.isArray(res.stations)) continue;
     for (const s of res.stations) seen.set(s.id, s.name);
   }
   return Array.from(seen, ([id, name]) => ({ id, name }));
