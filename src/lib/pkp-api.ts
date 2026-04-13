@@ -116,21 +116,18 @@ export async function fetchOperationsPage(
 }
 
 export async function fetchAllStations(apiKey: string): Promise<{ id: number; name: string }[]> {
-  const stations: { id: number; name: string }[] = [];
-  let skip = 0;
-  const take = 500;
-  while (true) {
-    const res = await pkpFetch<{ stations: { id: number; name: string }[]; totalCount: number; returnedCount: number }>(
+  const seen = new Map<number, string>();
+  const prefixes = "abcdefghijklmnopqrstuvwxyząćęłńóśźż0123456789".split("");
+  for (const p of prefixes) {
+    const res = await pkpFetch<{ stations: { id: number; name: string }[] }>(
       "/api/v1/dictionaries/stations",
       apiKey,
-      { skip: String(skip), take: String(take) },
+      { search: p },
     );
-    if (!res || res.stations.length === 0) break;
-    stations.push(...res.stations);
-    if (stations.length >= res.totalCount) break;
-    skip += res.stations.length;
+    if (!res) continue;
+    for (const s of res.stations) seen.set(s.id, s.name);
   }
-  return stations;
+  return Array.from(seen, ([id, name]) => ({ id, name }));
 }
 
 export async function fetchSchedules(
