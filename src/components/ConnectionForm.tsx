@@ -6,19 +6,22 @@ type Suggestion = { text: string; detail?: string };
 function useAutocomplete(type: "train" | "station", value: string) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string>("");
   useEffect(() => {
     const q = value.trim();
     if (q.length < 2) {
       setSuggestions([]);
+      setErr("");
       return;
     }
     setLoading(true);
+    setErr("");
     const ctrl = new AbortController();
     const t = setTimeout(() => {
       fetch(`/api/autocomplete?type=${type}&q=${encodeURIComponent(q)}`, { signal: ctrl.signal })
-        .then((r) => r.json())
+        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
         .then((d: { suggestions: Suggestion[] }) => setSuggestions(d.suggestions ?? []))
-        .catch(() => {})
+        .catch((e) => { if (e.name !== "AbortError") setErr(String(e.message || e)); })
         .finally(() => setLoading(false));
     }, 200);
     return () => {
@@ -26,7 +29,7 @@ function useAutocomplete(type: "train" | "station", value: string) {
       ctrl.abort();
     };
   }, [type, value]);
-  return { suggestions, loading };
+  return { suggestions, loading, err };
 }
 
 function AutocompleteInput({
@@ -46,8 +49,11 @@ function AutocompleteInput({
 }) {
   const [hidden, setHidden] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const { suggestions } = useAutocomplete(type, value);
+  const { suggestions, loading, err } = useAutocomplete(type, value);
   const open = !hidden && suggestions.length > 0;
+  const debug = value.trim().length >= 2
+    ? `[AC debug] ${loading ? "loading..." : `${suggestions.length} results`}${err ? ` err=${err}` : ""}`
+    : "";
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (!open) return;
@@ -85,6 +91,7 @@ function AutocompleteInput({
           required
         />
       </label>
+      {debug && <p className="mt-1 font-mono text-xs text-red-600">{debug}</p>}
       {open && (
         <ul className="absolute z-30 left-0 right-0 mt-1 bg-white border border-[var(--color-border)] rounded-xl shadow-lg max-h-64 overflow-y-auto">
           {suggestions.map((s, i) => (
