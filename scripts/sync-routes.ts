@@ -9,6 +9,10 @@ async function syncDate(apiKey: string, date: string): Promise<number> {
   const result = await fetchSchedules(apiKey, date);
   if (!result) { console.error(`[sync-routes] no data for ${date}`); return 0; }
 
+  const stationsTable = new Map<number, string>();
+  const rows = db().prepare("SELECT id, name FROM stations").all() as { id: number; name: string }[];
+  for (const r of rows) stationsTable.set(r.id, r.name);
+
   const upsertRoute = db().prepare(`
     INSERT INTO train_routes
       (operating_date, train_number, stop_sequence, station_name, station_id, arrival_time, departure_time)
@@ -34,8 +38,9 @@ async function syncDate(apiKey: string, date: string): Promise<number> {
       const trainNumber = extractTrainNumber(route);
       upsertId.run(route.scheduleId, route.orderId, trainNumber, route.carrierCode ?? null);
       for (const st of route.stations ?? []) {
+        const name = result.stations[String(st.stationId)] || stationsTable.get(st.stationId) || "";
         upsertRoute.run(date, trainNumber, st.orderNumber,
-          result.stations[String(st.stationId)] ?? "", st.stationId,
+          name, st.stationId,
           st.arrivalTime ?? null, st.departureTime ?? null);
       }
     }

@@ -31,8 +31,13 @@ function findTrain(trainInput: string): Train | null {
 
 function findRoute(trainNumber: string): RouteStop[] {
   return db().prepare(
-    `SELECT stop_sequence, station_name, arrival_time, departure_time
-     FROM train_routes WHERE operating_date = ? AND train_number = ? ORDER BY stop_sequence`,
+    `SELECT tr.stop_sequence,
+            COALESCE(NULLIF(tr.station_name, ''), s.name, '') as station_name,
+            tr.arrival_time, tr.departure_time
+     FROM train_routes tr
+     LEFT JOIN stations s ON s.id = tr.station_id
+     WHERE tr.operating_date = ? AND tr.train_number = ?
+     ORDER BY tr.stop_sequence`,
   ).all(todayWarsaw(), trainNumber) as RouteStop[];
 }
 
