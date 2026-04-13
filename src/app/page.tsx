@@ -3,8 +3,8 @@ import ConnectionForm from "@/components/ConnectionForm";
 export default function HomePage() {
   return (
     <main className="min-h-screen">
-      <section className="relative overflow-hidden text-white py-24 px-6">
-        <div className="absolute inset-0">
+      <section className="relative text-white py-24 px-6">
+        <div className="absolute inset-0 overflow-hidden">
           <img src="/hero-train.jpg" alt="Pociąg PKP na peronie dworca kolejowego w Polsce" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/75 to-[var(--color-ink)]"></div>
         </div>
